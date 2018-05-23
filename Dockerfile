@@ -1,5 +1,5 @@
 # Use Ubuntu 16.04 + wine-staging as a base for MSVC2017
-FROM boberfly/docker-wine:latest
+FROM boberfly/docker-wine:latest as builder
 
 # For running anything headless in wine that needs a GUI, and 7zip
 RUN apt-get update && apt-get install -y xvfb p7zip-full
@@ -21,7 +21,7 @@ COPY xvfb-start.sh /usr/bin/xvfb-start
 # From now onwards we take the role of the wine user
 USER wine:wine
 
-# Download the Windows SDK
+# Download the Windows SDK, uncomment COPY and comment out ADD if you have the sdk local and named win10sdk.iso
 #COPY --chown=wine:wine win10sdk.iso /home/wine/win10sdk.iso
 ADD --chown=wine:wine https://go.microsoft.com/fwlink/p/?linkid=870809 /home/wine/win10sdk.iso
 
@@ -34,29 +34,66 @@ RUN xvfb-start && export DISPLAY=:99 \
     && wine msiexec /i "Windows SDK Desktop Libs x64-x86_en-us.msi" /qn \ 
     && wine msiexec /i "Windows SDK Desktop Libs x86-x86_en-us.msi" /qn \ 
     && wine msiexec /i "Universal CRT Headers Libraries and Sources-x86_en-us.msi" /qn \
-    && cd /home/wine && rm -rf win10sdk && winetricks -q vcrun2017
+    && cd /home/wine && rm -rf win10sdk
 
 # Now we grab MSVC 2017 Community from Nuget
 WORKDIR /home/wine/.wine/drive_c
 RUN nuget install VisualCppTools.Community.VS2017Layout -Version 14.11.25506 \
-    && rm /home/wine/.local/share/NuGet/Cache/VisualCppTools.Community.VS2017Layout.14.11.25506.nupkg
+    && rm /home/wine/.local/share/NuGet/Cache/VisualCppTools.Community.VS2017Layout.14.11.25506.nupkg \
+    && rm VisualCppTools.Community.VS2017Layout.14.11.25506/VisualCppTools.Community.VS2017Layout.14.11.25506.nupkg
 
-# Time to grab CMake and bundle it in.
+# Time to grab CMake and friends.
 ADD --chown=wine:wine https://cmake.org/files/v3.10/cmake-3.10.3-win64-x64.zip cmake.zip
-RUN 7z x cmake.zip && rm cmake.zip
-
-# Symlink all the things!
-RUN ln -s VisualCppTools.Community.VS2017Layout.14.11.25506 msvc2017 \ 
-    && ln -s "Program Files (x86)/Windows Kits/10" win10sdk \
-    && ln -s cmake-3.10.3-win64-x64 cmake
+ADD --chown=wine:wine https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-win.zip ninja.zip
+ADD --chown=wine:wine http://download.qt.io/official_releases/jom/jom.zip jom.zip
+RUN 7z x cmake.zip && rm cmake.zip \
+    && mkdir ninja && cd ninja && 7z x ../ninja.zip && cd .. && rm ninja.zip \
+    && mkdir jom && cd jom && 7z x ../jom.zip && cd .. && rm jom.zip
 
 # Copy an env we prepared earlier
 COPY --chown=wine:wine msvc2017x64env.bat msvc2017x64env.bat
 
+USER root
+# END
+
+
+
+
+# Now lets make a lighter image
+FROM boberfly/docker-wine:latest
+WORKDIR /opt/
+COPY --from=builder /home/wine/.wine/drive_c/VisualCppTools.Community.VS2017Layout.14.11.25506 msvc2017
+COPY --from=builder ["/home/wine/.wine/drive_c/Program Files (x86)/Windows Kits/10", "win10sdk"]
+COPY --from=builder /home/wine/.wine/drive_c/cmake-3.10.3-win64-x64 cmake
+COPY --from=builder /home/wine/.wine/drive_c/ninja ninja
+COPY --from=builder /home/wine/.wine/drive_c/jom jom
+COPY --from=builder /usr/bin/xvfb-start /usr/bin/xvfb-start
+RUN apt-get install -y xvfb \
+# Clean up
+    && apt-get autoremove -y \
+        software-properties-common \
+    && apt-get autoclean \
+    && apt-get clean \
+    && apt-get autoremove
+USER wine:wine
+RUN xvfb-start && export DISPLAY=:99 && wine wineboot --init \
+    && winetricks -q vcrun2017
+COPY --from=builder --chown=wine:wine /home/wine/.wine/drive_c/msvc2017x64env.bat /home/wine/.wine/drive_c/msvc2017x64env.bat
+# Symlink all the things, again!
+WORKDIR /home/wine/.wine/drive_c/
+RUN ln -s /opt/msvc2017 msvc2017 \ 
+    && ln -s /opt/win10sdk win10sdk \
+    && ln -s /opt/cmake cmake \
+    && ln -s /opt/ninja ninja \
+    && ln -s /opt/jom jom
+
+USER root
+
+# So that when docker runs we can copy over the guts to a volume
 VOLUME /home/wine
 
 # Start with a generic entrypoint.
 ENTRYPOINT ["/usr/bin/entrypoint"]
 
 # Default to cmd with MSVC 2017 64-bit as the default target.
-CMD ["/usr/bin/entrypoint", "wine", "cmd.exe", "/k", "C:\msvc2017x64env.bat"]
+CMD ["/usr/bin/entrypoint", "wine", "cmd.exe", "/k", "C:\\msvc2017x64env.bat &&"]

@@ -40,4 +40,4 @@ docker run -it \
     --volume="winehome${branch}:/home/wine" \
     --net="host" \
     --name="wine${branch}" \
-    docker-msvc-wine${branch} $*
+    boberfly/docker-msvc-wine${branch} $*
