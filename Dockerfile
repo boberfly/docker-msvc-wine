@@ -21,9 +21,18 @@ COPY xvfb-start.sh /usr/bin/xvfb-start
 # From now onwards we take the role of the wine user
 USER wine:wine
 
+# Now we grab MSVC 2017 Community from Nuget
+WORKDIR /home/wine
+RUN nuget install VisualCppTools.Community.VS2017Layout -Version 14.11.25506 \
+    && rm /home/wine/.local/share/NuGet/Cache/VisualCppTools.Community.VS2017Layout.14.11.25506.nupkg \
+    && rm VisualCppTools.Community.VS2017Layout.14.11.25506/VisualCppTools.Community.VS2017Layout.14.11.25506.nupkg
+
 # Download the Windows SDK, uncomment COPY and comment out ADD if you have the sdk local and named win10sdk.iso
 #COPY --chown=wine:wine win10sdk.iso /home/wine/win10sdk.iso
 ADD --chown=wine:wine https://go.microsoft.com/fwlink/p/?linkid=870809 /home/wine/win10sdk.iso
+
+# Python 2.7
+ADD --chown=wine:wine https://www.python.org/ftp/python/2.7.15/python-2.7.15.amd64.msi python.msi
 
 # This convoluted RUN will extract and install the .msi's we are interested in for building against Windows 10
 RUN xvfb-start && export DISPLAY=:99 \
@@ -33,15 +42,18 @@ RUN xvfb-start && export DISPLAY=:99 \
     && wine msiexec /i "Windows SDK Desktop Headers x86-x86_en-us.msi" /qn \ 
     && wine msiexec /i "Windows SDK Desktop Libs x64-x86_en-us.msi" /qn \ 
     && wine msiexec /i "Windows SDK Desktop Libs x86-x86_en-us.msi" /qn \ 
+    && wine msiexec /i "Windows SDK Desktop Tools x64-x86_en-us.msi" /qn \
+    && wine msiexec /i "Windows SDK Desktop Tools x86-x86_en-us.msi" /qn \
+    && wine msiexec /i "Windows SDK for Windows Store Apps Headers-x86_en-us.msi" /qn \
+    && wine msiexec /i "Windows SDK for Windows Store Apps Libs-x86_en-us.msi" /qn \
+    && wine msiexec /i "Windows SDK for Windows Store Apps Tools-x86_en-us.msi" /qn \
+    && wine msiexec /i "Windows SDK for Windows Store Apps Legacy Tools-x86_en-us.msi" /qn \
     && wine msiexec /i "Universal CRT Headers Libraries and Sources-x86_en-us.msi" /qn \
-    && cd /home/wine && rm -rf win10sdk
+# Lets install Python while we're here
+    && wine msiexec /i "Z:\home\wine\python.msi" /qn \
+    && cd /home/wine && rm -rf win10sdk && rm python.msi
 
-# Now we grab MSVC 2017 Community from Nuget
 WORKDIR /home/wine/.wine/drive_c
-RUN nuget install VisualCppTools.Community.VS2017Layout -Version 14.11.25506 \
-    && rm /home/wine/.local/share/NuGet/Cache/VisualCppTools.Community.VS2017Layout.14.11.25506.nupkg \
-    && rm VisualCppTools.Community.VS2017Layout.14.11.25506/VisualCppTools.Community.VS2017Layout.14.11.25506.nupkg
-
 # Time to grab CMake and friends.
 ADD --chown=wine:wine https://cmake.org/files/v3.10/cmake-3.10.3-win64-x64.zip cmake.zip
 ADD --chown=wine:wine https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-win.zip ninja.zip
@@ -62,11 +74,12 @@ USER root
 # Now lets make a lighter image
 FROM boberfly/docker-wine:latest
 WORKDIR /opt/
-COPY --from=builder /home/wine/.wine/drive_c/VisualCppTools.Community.VS2017Layout.14.11.25506 msvc2017
+COPY --from=builder /home/wine/VisualCppTools.Community.VS2017Layout.14.11.25506 msvc2017
 COPY --from=builder ["/home/wine/.wine/drive_c/Program Files (x86)/Windows Kits/10", "win10sdk"]
 COPY --from=builder /home/wine/.wine/drive_c/cmake-3.10.3-win64-x64 cmake
 COPY --from=builder /home/wine/.wine/drive_c/ninja ninja
 COPY --from=builder /home/wine/.wine/drive_c/jom jom
+COPY --from=builder /home/wine/.wine/drive_c/Python27 python27
 COPY --from=builder /usr/bin/xvfb-start /usr/bin/xvfb-start
 RUN apt-get install -y xvfb \
 # Clean up
@@ -77,15 +90,16 @@ RUN apt-get install -y xvfb \
     && apt-get autoremove
 USER wine:wine
 RUN xvfb-start && export DISPLAY=:99 && wine wineboot --init \
-    && winetricks -q vcrun2017
+    && winetricks -q vcrun2017 && winetricks -q win7
 COPY --from=builder --chown=wine:wine /home/wine/.wine/drive_c/msvc2017x64env.bat /home/wine/.wine/drive_c/msvc2017x64env.bat
-# Symlink all the things, again!
+# Symlink all the things!
 WORKDIR /home/wine/.wine/drive_c/
 RUN ln -s /opt/msvc2017 msvc2017 \ 
     && ln -s /opt/win10sdk win10sdk \
     && ln -s /opt/cmake cmake \
     && ln -s /opt/ninja ninja \
-    && ln -s /opt/jom jom
+    && ln -s /opt/jom jom \
+    && ln -s /opt/python27 python27
 
 USER root
 

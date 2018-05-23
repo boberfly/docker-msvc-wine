@@ -11,6 +11,7 @@ How to use
 Stuff to know
 -------------
 - CMake is bundled, as well as Ninja and JOM so that you don't have to suffer with NMake (MSTarget doesn't work yet)
+- Python 2.7.15 is in here too.
 - This now uses a multi-stage build to chew off a bit of fat, so now msvc2017/win10sdk/etc. are located in /opt
 
 Todo
