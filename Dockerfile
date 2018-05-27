@@ -24,9 +24,9 @@ USER wine:wine
 # Now we grab MSVC 2017 Community from Nuget
 WORKDIR /home/wine
 RUN nuget install VisualCppTools.Community.VS2017Layout -Version 14.11.25506 \
-    && rm /home/wine/.local/share/NuGet/Cache/VisualCppTools.Community.VS2017Layout.14.11.25506.nupkg \
-    && rm VisualCppTools.Community.VS2017Layout.14.11.25506/VisualCppTools.Community.VS2017Layout.14.11.25506.nupkg
-
+    && rm VisualCppTools.Community.VS2017Layout.14.11.25506/VisualCppTools.Community.VS2017Layout.14.11.25506.nupkg \
+    && nuget install Git-Windows-Minimal -Version 2.17.0 \
+    && rm Git-Windows-Minimal.2.17.0/Git-Windows-Minimal.2.17.0.nupkg
 # Download the Windows SDK, uncomment COPY and comment out ADD if you have the sdk local and named win10sdk.iso
 #COPY --chown=wine:wine win10sdk.iso /home/wine/win10sdk.iso
 ADD --chown=wine:wine https://go.microsoft.com/fwlink/p/?linkid=870809 /home/wine/win10sdk.iso
@@ -62,9 +62,6 @@ RUN 7z x cmake.zip && rm cmake.zip \
     && mkdir ninja && cd ninja && 7z x ../ninja.zip && cd .. && rm ninja.zip \
     && mkdir jom && cd jom && 7z x ../jom.zip && cd .. && rm jom.zip
 
-# Copy an env we prepared earlier
-COPY --chown=wine:wine msvc2017x64env.bat msvc2017x64env.bat
-
 USER root
 # END
 
@@ -80,8 +77,9 @@ COPY --from=builder /home/wine/.wine/drive_c/cmake-3.10.3-win64-x64 cmake
 COPY --from=builder /home/wine/.wine/drive_c/ninja ninja
 COPY --from=builder /home/wine/.wine/drive_c/jom jom
 COPY --from=builder /home/wine/.wine/drive_c/Python27 python27
+COPY --from=builder /home/wine/Git-Windows-Minimal.2.17.0 git
 COPY --from=builder /usr/bin/xvfb-start /usr/bin/xvfb-start
-RUN apt-get install -y xvfb \
+RUN apt-get install -y xvfb git nano \
 # Clean up
     && apt-get autoremove -y \
         software-properties-common \
@@ -90,8 +88,10 @@ RUN apt-get install -y xvfb \
     && apt-get autoremove
 USER wine:wine
 RUN xvfb-start && export DISPLAY=:99 && wine wineboot --init \
-    && winetricks -q vcrun2017 && winetricks -q win7
-COPY --from=builder --chown=wine:wine /home/wine/.wine/drive_c/msvc2017x64env.bat /home/wine/.wine/drive_c/msvc2017x64env.bat
+    && winetricks -q vcrun2017 cmd && winetricks -q win7
+# Copy an env we prepared earlier
+COPY --chown=wine:wine msvc2017x64env.bat /home/wine/.wine/drive_c/msvc2017x64env.bat
+COPY entrypoint_msvc.sh /usr/bin/entrypoint_msvc
 # Symlink all the things!
 WORKDIR /home/wine/.wine/drive_c/
 RUN ln -s /opt/msvc2017 msvc2017 \ 
@@ -99,15 +99,21 @@ RUN ln -s /opt/msvc2017 msvc2017 \
     && ln -s /opt/cmake cmake \
     && ln -s /opt/ninja ninja \
     && ln -s /opt/jom jom \
-    && ln -s /opt/python27 python27
+    && ln -s /opt/python27 python27 \
+    && ln -s /opt/git git
 
 USER root
+# vctip.exe is a telemetry tool which isn't needed and it causes weird stack traces in cmd...
+RUN rm /opt/msvc2017/lib/native/bin/Hostx64/x64/VCTIP.exe && \
+    rm /opt/msvc2017/lib/native/bin/Hostx64/x86/VCTIP.exe && \
+    rm /opt/msvc2017/lib/native/bin/Hostx86/x64/VCTIP.exe && \
+    rm /opt/msvc2017/lib/native/bin/Hostx86/x86/VCTIP.exe
 
 # So that when docker runs we can copy over the guts to a volume
-VOLUME /home/wine
+#VOLUME /home/wine
 
 # Start with a generic entrypoint.
-ENTRYPOINT ["/usr/bin/entrypoint"]
+ENTRYPOINT ["/usr/bin/entrypoint_msvc"]
 
 # Default to cmd with MSVC 2017 64-bit as the default target.
-CMD ["/usr/bin/entrypoint", "wine", "cmd.exe", "/k", "C:\\msvc2017x64env.bat &&"]
+CMD ["/usr/bin/entrypoint_msvc"]

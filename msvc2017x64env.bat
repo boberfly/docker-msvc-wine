@@ -1,11 +1,11 @@
-echo off
+@echo off
 
 set DevEnvDir=C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\
 set ExtensionSdkDir=C:\Program Files (x86)\Microsoft SDKs\Windows Kits\10\ExtensionSDKs
 set INCLUDE=C:\msvc2017\lib\native\atlmfc\include;C:\msvc2017\lib\native\include;C:\win10sdk\include\10.0.17134.0\ucrt;C:\win10sdk\include\10.0.17134.0\shared;C:\win10sdk\include\10.0.17134.0\um;C:\win10sdk\include\10.0.17134.0\winrt;C:\win10sdk\include\10.0.17134.0\cppwinrt
 set LIB=C:\msvc2017\lib\native\atlmfc\lib\x64;C:\msvc2017\lib\native\lib\x64;C:\win10sdk\lib\10.0.17134.0\ucrt\x64;C:\win10sdk\lib\10.0.17134.0\um\x64;
 set LIBPATH=C:\msvc2017\lib\native\atlmfc\lib\x64;C:\msvc2017\lib\native\lib\x64;C:\msvc2017\lib\native\lib\x86\store\references;C:\win10sdk\UnionMetadata\10.0.17134.0;C:\win10sdk\References\10.0.17134.0;
-set PATH=C:\msvc2017\lib\native\bin\HostX64\x64;C:\win10sdk\bin\10.0.17134.0\x64;C:\win10sdk\bin\x64;C:\cmake\bin;C:\ninja;C:\jom;C:\Python27;C:\Python27\Scripts;%PATH%
+set PATH=C:\msvc2017\lib\native\bin\HostX64\x64;C:\win10sdk\bin\10.0.17134.0\x64;C:\win10sdk\bin\x64;C:\cmake\bin;C:\ninja;C:\jom;C:\Python27;C:\Python27\Scripts;C:\git\tools\cmd;C:\git\tools\usr\bin;%PATH%
 set Platform=x64
 set UCRTVersion=10.0.17134.0
 set UniversalCRTSdkDir=C:\win10sdk\
@@ -31,3 +31,5 @@ rem set WindowsSDK_ExecutablePath_x64=C:\Program Files (x86)\Microsoft SDKs\Wind
 rem set WindowsSDK_ExecutablePath_x86=C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.6.1 Tools\
 set __DOTNET_ADD_64BIT=1
 set __DOTNET_PREFERRED_BITNESS=64
+
+call %*
